@@ -1,14 +1,35 @@
 // test/SupadataLoader.test.ts
-import { beforeEach, afterAll, describe, expect, it, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { SupadataLoader } from "../src/SupadataLoader.js";
 
-const mockTranscript = vi.fn();
-const mockYoutubeVideo = vi.fn();
-const mockSupadataConstructor = vi.fn().mockImplementation(() => ({
-  transcript: mockTranscript,
-  youtube: { video: mockYoutubeVideo },
-}));
+// All mock functions must be created inside vi.hoisted
+// so they're available when the hoisted vi.mock() runs.
+const {
+  mockTranscript,
+  mockYoutubeVideo,
+  mockSupadataConstructor,
+} = vi.hoisted(() => {
+  const mockTranscript = vi.fn();
+  const mockYoutubeVideo = vi.fn();
 
+  const mockSupadataConstructor = vi.fn().mockImplementation(() => ({
+    transcript: mockTranscript,
+    youtube: {
+      video: mockYoutubeVideo,
+    },
+  }));
+
+  return { mockTranscript, mockYoutubeVideo, mockSupadataConstructor };
+});
+
+// Mock the Supadata SDK using the hoisted mocks above
 vi.mock("@supadata/js", () => ({
   Supadata: mockSupadataConstructor,
 }));
@@ -17,13 +38,12 @@ const REAL_ENV = process.env;
 
 beforeEach(() => {
   process.env = { ...REAL_ENV };
-  vi.clearAllMocks();
   mockTranscript.mockReset();
   mockYoutubeVideo.mockReset();
   mockSupadataConstructor.mockClear();
 });
 
-afterAll(() => {
+afterEach(() => {
   process.env = REAL_ENV;
 });
 
@@ -32,7 +52,7 @@ describe("SupadataLoader", () => {
     mockTranscript.mockResolvedValue({ content: "test", lang: "en" });
 
     const loader = new SupadataLoader({
-      urls: ["https://youtube.com/watch?v=123"],
+      urls: ["https://www.youtube.com/watch?v=123"],
       apiKey: "test-key",
     });
 
@@ -41,11 +61,14 @@ describe("SupadataLoader", () => {
     expect(mockSupadataConstructor).toHaveBeenCalledWith({ apiKey: "test-key" });
   });
 
-  it("fetches transcript", async () => {
-    mockTranscript.mockResolvedValue({ content: "Hello world", lang: "en" });
+  it("fetches transcript successfully", async () => {
+    mockTranscript.mockResolvedValue({
+      content: "Hello world",
+      lang: "en",
+    });
 
     const loader = new SupadataLoader({
-      urls: ["https://youtube.com/watch?v=123"],
+      urls: ["https://www.youtube.com/watch?v=123"],
       apiKey: "test-key",
       operation: "transcript",
     });
@@ -53,24 +76,31 @@ describe("SupadataLoader", () => {
     const docs = await loader.load();
 
     expect(mockTranscript).toHaveBeenCalledWith(
-      expect.objectContaining({ url: "https://youtube.com/watch?v=123", text: true }),
+      expect.objectContaining({
+        url: "https://www.youtube.com/watch?v=123",
+        text: true,
+      }),
     );
     expect(docs).toHaveLength(1);
     expect(docs[0].pageContent).toBe("Hello world");
   });
 
-  it("fetches metadata via youtube.video", async () => {
+  it("fetches metadata successfully", async () => {
     mockYoutubeVideo.mockResolvedValue({ title: "Awesome Video" });
 
     const loader = new SupadataLoader({
-      urls: ["https://youtube.com/watch?v=123"],
+      urls: ["https://www.youtube.com/watch?v=123"],
       apiKey: "test-key",
       operation: "metadata",
     });
 
     const docs = await loader.load();
 
-    expect(mockYoutubeVideo).toHaveBeenCalled();
+    expect(mockYoutubeVideo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://www.youtube.com/watch?v=123",
+      }),
+    );
     expect(docs).toHaveLength(1);
     expect(docs[0].pageContent).toContain("Awesome Video");
     expect(docs[0].metadata.supadataOperation).toBe("metadata");
