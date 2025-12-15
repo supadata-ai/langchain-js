@@ -1,0 +1,51 @@
+{
+  "name": "langchain-supadata",
+  "version": "0.1.0",
+  "description": "Supadata document loader integration for LangChain JS",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": [
+    "langchain",
+    "supadata",
+    "document-loader",
+    "ai",
+    "rag"
+  ],
+  "author": "Mudassir",
+  "license": "MIT",
+  "peerDependencies": {
+    "@langchain/core": "^1.1.3"
+  },
+  "dependencies": {
+    "@supadata/js": "^1.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ]
+}
