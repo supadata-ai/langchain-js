@@ -1,104 +1,58 @@
-# langchain-supadata
 
-Supadata document loader integration for **LangChain JS**.
+Supadata document loader integration for LangChain JS.
 
-This package provides a `SupadataLoader` that wraps the official
-[`@supadata/js`](https://www.npmjs.com/package/@supadata/js) SDK and exposes it
-as a LangChain `BaseDocumentLoader`.
+This package provides a `SupadataLoader` that wraps the official `@supadata/js` SDK and exposes it as a LangChain `BaseDocumentLoader`.
 
-It supports two core Supadata features:
+Supported operations:
+- Transcript: fetch transcript for a supported social media video/post URL.
+- Metadata: fetch structured metadata for a supported social media video/post URL.
 
-- **Get Transcript** – fetch transcripts (plain text or structured) for a URL.
-- **Get Metadata** – fetch structured metadata for a URL (YouTube or generic web page).
+Supported URLs are video/post URLs from: YouTube, TikTok, Instagram, Facebook, Twitter/X.
 
----
+This package does NOT perform generic web scraping and does NOT call any web scrape APIs.
 
-## Installation
-
-```bash
-npm install langchain-supadata @langchain/core
-# @supadata/js is installed transitively by this package
-or with pnpm:
-```
-```bash
-pnpm add langchain-supadata @langchain/core
-```
-
-You also need a Supadata API key from https://supadata.ai.
-
-Set it as an environment variable:
+Set your Supadata API key:
 
 ```bash
 export SUPADATA_API_KEY="your_api_key_here"
 ```
 
-You can also pass the API key explicitly to the loader (see examples below).
-
-## Transcript (default operation)
+## Usage
 
 ```ts
 import { SupadataLoader } from "langchain-supadata";
 
 const loader = new SupadataLoader({
-  urls: ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-  // optional; will fall back to SUPADATA_API_KEY if omitted
-  apiKey: process.env.SUPADATA_API_KEY,
-  operation: "transcript", // default
-  lang: "en",
-  text: true,              // return plain-text transcript
-  mode: "auto"             // "native" | "auto" | "generate"
+  apiKey: process.env.SUPADATA_API_KEY
 });
 
-const docs = await loader.load();
+const docs = await loader.load({
+  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  operation: "transcript",
+  lang: "en",
+  text: true,
+  mode: "auto"
+});
 
-console.log(docs[0].pageContent.slice(0, 500));
+console.log(docs[0].pageContent);
 console.log(docs[0].metadata);
-// {
-//   source: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-//   supadataOperation: "transcript",
-//   lang: "en"
-// }
 ```
 
-If Supadata returns a long-running job, the loader will return a Document
-whose metadata.supadataOperation === "transcript_job" and metadata.jobId
-contains the job identifier. You can then poll Supadata directly using the SDK.
+### Metadata example
 
-## Metadata
 ```ts
 import { SupadataLoader } from "langchain-supadata";
 
 const loader = new SupadataLoader({
-  urls: [
-    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    "https://supadata.ai"
-  ],
+  apiKey: process.env.SUPADATA_API_KEY
+});
+
+const docs = await loader.load({
+  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   operation: "metadata"
 });
 
-const docs = await loader.load();
-
-for (const doc of docs) {
-  console.log(doc.metadata.source);
-  console.log(doc.pageContent); // JSON string of metadata
-}
-```
-
-For YouTube URLs, the loader calls supadata.youtube.video(...).
-For non-YouTube URLs, it calls supadata.web.scrape(...).
-
-You can also pass through additional Supadata options:
-
-```ts
-const loader = new SupadataLoader({
-  urls: ["https://supadata.ai"],
-  operation: "metadata",
-  params: {
-    // forwarded to Supadata SDK:
-    // e.g. custom selectors, language hints, etc.
-    timeoutMs: 30000
-  }
-});
+console.log(docs[0].pageContent);
 ```
 
 ## API
@@ -106,28 +60,24 @@ const loader = new SupadataLoader({
 ```ts
 type SupadataOperation = "metadata" | "transcript";
 
-interface SupadataLoaderParams {
-  urls: string[];
+type SupadataTranscriptMode = "native" | "auto" | "generate";
+
+interface SupadataLoaderInit {
   apiKey?: string;
+}
+
+interface SupadataLoaderLoadInput {
+  url: string;
   operation?: SupadataOperation;
   lang?: string;
   text?: boolean;
-  mode?: "native" | "auto" | "generate";
+  mode?: SupadataTranscriptMode;
   params?: Record<string, unknown>;
 }
 
 class SupadataLoader extends BaseDocumentLoader {
-  constructor(params: SupadataLoaderParams);
+  constructor(init?: SupadataLoaderInit);
 
-  load(): Promise<Document[]>;
+  load(input: SupadataLoaderLoadInput): Promise<Document[]>;
 }
 ```
-
-URLs: one or more URLs (YouTube, web pages, etc.). </br>
-apiKey: optional, otherwise SUPADATA_API_KEY is used.  </br>
-operation:
-"transcript" (default): returns Document.pageContent as transcript text. </br>
-"metadata": returns Document.pageContent as pretty-printed JSON string. </br>
-params: extra options forwarded directly to the Supadata SDK. </br>
-
-

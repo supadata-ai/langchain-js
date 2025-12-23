@@ -6,105 +6,75 @@ import {Supadata} from "@supadata/js";
 
 export type SupadataOperation = "metadata" | "transcript";
 
-export interface SupadataLoaderParams {
-    /** URLs to load (YouTube, web pages, etc.). */
-    urls: string[];
-    /**
-     * Supadata API key. If omitted, falls back to SUPADATA_API_KEY env var.
-     */
+export type SupadataTranscriptMode = "native" | "auto" | "generate";
+
+export interface SupadataLoaderInit {
     apiKey?: string;
-    /**
-     * Operation to perform. "metadata" returns structured info,
-     * "transcript" returns textual content. Default: "transcript".
-     */
+}
+
+export interface SupadataLoaderLoadInput {
+    url: string;
     operation?: SupadataOperation;
-    /** Preferred transcript language, e.g. "en". */
     lang?: string;
-    /**
-     * If true, return plain-text transcript instead of timestamped chunks.
-     * Default: true.
-     */
     text?: boolean;
-    /** Transcript mode, e.g. "native", "auto", or "generate". */
-    mode?: "native" | "auto" | "generate";
-    /** Extra parameters forwarded directly to the Supadata SDK. */
+    mode?: SupadataTranscriptMode;
     params?: Record<string, unknown>;
 }
 
 /**
- * Supadata document loader for LangChain JS.
+ * SupadataLoader integrates Supadata’s video/post scraping endpoints with LangChain JS.
  *
- * Supports two operations:
- *  - "transcript": fetch a transcript for the given URL
- *  - "metadata": fetch metadata for the given URL
+ * Supported operations:
+ * - "transcript": Fetch transcript for a supported social media URL.
+ * - "metadata": Fetch structured metadata for a supported social media URL.
  *
- * API key is read either from the `apiKey` parameter or from
- * the `SUPADATA_API_KEY` environment variable.
+ * Supported URLs are video/post URLs from: YouTube, TikTok, Instagram, Facebook, Twitter/X.
+ *
+ * This loader does NOT perform generic web scraping and does NOT call any web scrape APIs.
+ *
+ * The loader is instantiated once (with optional API key), and request-specific parameters
+ * are provided to `load(...)`.
  */
 export class SupadataLoader extends BaseDocumentLoader {
-    private readonly urls: string[];
-
     private readonly apiKey?: string;
 
-    private readonly operation: SupadataOperation;
-
-    private readonly lang?: string;
-
-    private readonly text: boolean;
-
-    private readonly mode?: "native" | "auto" | "generate";
-
-    private readonly params: Record<string, unknown>;
-
-    constructor(params: SupadataLoaderParams) {
+    constructor(init: SupadataLoaderInit = {}) {
         super();
+        this.apiKey = init.apiKey;
+    }
 
-        if (!params.urls || params.urls.length === 0) {
+    async load(input: SupadataLoaderLoadInput): Promise<Document[]> {
+        if (!input?.url) {
+            throw new Error("SupadataLoader.load: `url` is required.");
+        }
+
+        const url = input.url;
+        if (!this.isSupportedSocialUrl(url)) {
             throw new Error(
-                "SupadataLoader: at least one URL is required in `urls`.",
+                "SupadataLoader: only social media video/post URLs are supported (YouTube, TikTok, Instagram, Facebook, Twitter/X).",
             );
         }
 
-        this.urls = params.urls;
-        this.apiKey = params.apiKey;
-        this.operation = params.operation ?? "transcript";
-        this.lang = params.lang;
-        this.text = params.text ?? true;
-        this.mode = params.mode;
-        this.params = params.params ?? {};
-    }
-
-    async load(): Promise<Document[]> {
+        const operation: SupadataOperation = input.operation ?? "transcript";
         const client = this.getClient();
-        const docs: Document[] = [];
 
-        for (const url of this.urls) {
-            try {
-                if (this.operation === "metadata") {
-                    docs.push(await this.loadMetadata(client, url));
-                } else if (this.operation === "transcript") {
-                    docs.push(await this.loadTranscript(client, url));
-                } else {
-                    throw new Error(
-                        `SupadataLoader: unsupported operation "${this.operation}". Use "metadata" or "transcript".`,
-                    );
-                }
-            } catch (e: any) {
-                // Surface the failure but keep processing other URLs
-                // eslint-disable-next-line no-console
-                console.warn(
-                    `SupadataLoader: failed to load ${url}: ${e?.message ?? e}`,
-                );
-            }
+        if (operation === "transcript") {
+            const doc = await this.loadTranscript(client, input);
+            return [doc];
         }
 
-        return docs;
+        if (operation === "metadata") {
+            const doc = await this.loadMetadata(client, input);
+            return [doc];
+        }
+
+        throw new Error(
+            `SupadataLoader: unsupported operation "${operation}". Use "metadata" or "transcript".`,
+        );
     }
 
     private resolveApiKey(): string {
-        if (this.apiKey) {
-            return this.apiKey;
-        }
+        if (this.apiKey) return this.apiKey;
 
         const envKey = getEnvironmentVariable("SUPADATA_API_KEY");
         if (!envKey) {
@@ -120,66 +90,48 @@ export class SupadataLoader extends BaseDocumentLoader {
         return new Supadata({apiKey});
     }
 
-    private async loadMetadata(client: Supadata, url: string): Promise<Document> {
-        let isYoutube = false;
-
+    private isSupportedSocialUrl(url: string): boolean {
         try {
-            const hostname = new URL(url).hostname.toLowerCase();
-
-            isYoutube =
-                hostname === "youtube.com" ||
-                hostname === "www.youtube.com" ||
-                hostname.endsWith(".youtube.com") ||
-                hostname === "youtu.be";
-        } catch {
-            isYoutube = false;
-        }
-
-        let result: unknown;
-        if (isYoutube && (client as any).youtube?.video) {
-            result = await (client as any).youtube.video({url, ...this.params});
-        } else if ((client as any).web?.scrape) {
-            result = await (client as any).web.scrape({url, ...this.params});
-        } else {
-            throw new Error(
-                "SupadataLoader: could not determine a Supadata SDK method to call for metadata. " +
-                "Ensure the SDK version exposes either `youtube.video` or `web.scrape`.",
+            const host = new URL(url).hostname.toLowerCase();
+            return (
+                this.isHost(host, "youtube.com") ||
+                this.isHost(host, "youtu.be") ||
+                this.isHost(host, "tiktok.com") ||
+                this.isHost(host, "instagram.com") ||
+                this.isHost(host, "facebook.com") ||
+                this.isHost(host, "fb.watch") ||
+                this.isHost(host, "twitter.com") ||
+                this.isHost(host, "x.com")
             );
+        } catch {
+            return false;
         }
+    }
 
-        return new Document({
-            pageContent: JSON.stringify(result, null, 2),
-            metadata: {
-                source: url,
-                supadataOperation: "metadata",
-            },
-        });
+    private isHost(host: string, domain: string): boolean {
+        return host === domain || host.endsWith(`.${domain}`);
     }
 
     private async loadTranscript(
         client: Supadata,
-        url: string,
+        input: SupadataLoaderLoadInput,
     ): Promise<Document> {
         const payload: Record<string, unknown> = {
-            url,
-            text: this.text,
-            ...this.params,
+            url: input.url,
+            text: input.text ?? true,
+            ...(input.params ?? {}),
         };
 
-        if (this.lang) {
-            payload.lang = this.lang;
-        }
-        if (this.mode) {
-            payload.mode = this.mode;
-        }
+        if (input.lang) payload.lang = input.lang;
+        if (input.mode) payload.mode = input.mode;
 
         const result: any = await (client as any).transcript(payload);
 
-        if (result.jobId) {
+        if (result?.jobId) {
             return new Document({
                 pageContent: `Transcript processing. Job ID: ${result.jobId}`,
                 metadata: {
-                    source: url,
+                    source: input.url,
                     supadataOperation: "transcript_job",
                     jobId: result.jobId,
                 },
@@ -187,12 +139,54 @@ export class SupadataLoader extends BaseDocumentLoader {
         }
 
         return new Document({
-            pageContent: result.content,
+            pageContent: result?.content ?? "",
             metadata: {
-                source: url,
+                source: input.url,
                 supadataOperation: "transcript",
-                lang: result.lang,
+                lang: result?.lang ?? input.lang,
             },
         });
+    }
+
+    private async loadMetadata(
+        client: Supadata,
+        input: SupadataLoaderLoadInput,
+    ): Promise<Document> {
+        const payload: Record<string, unknown> = {
+            url: input.url,
+            ...(input.params ?? {}),
+        };
+
+        let result: unknown;
+
+        if (typeof (client as any).metadata === "function") {
+            result = await (client as any).metadata(payload);
+        } else {
+            const isYoutube = this.isSupportedSocialUrl(input.url) && this.isYoutubeUrl(input.url);
+            if (isYoutube && (client as any).youtube?.video) {
+                result = await (client as any).youtube.video(payload);
+            } else {
+                throw new Error(
+                    "SupadataLoader: Supadata SDK does not expose a metadata method for this operation. Please upgrade @supadata/js.",
+                );
+            }
+        }
+
+        return new Document({
+            pageContent: JSON.stringify(result, null, 2),
+            metadata: {
+                source: input.url,
+                supadataOperation: "metadata",
+            },
+        });
+    }
+
+    private isYoutubeUrl(url: string): boolean {
+        try {
+            const host = new URL(url).hostname.toLowerCase();
+            return this.isHost(host, "youtube.com") || this.isHost(host, "youtu.be");
+        } catch {
+            return false;
+        }
     }
 }
