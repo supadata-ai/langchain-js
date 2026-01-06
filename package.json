@@ -1,15 +1,15 @@
 {
-  "name": "langchain-supadata",
+  "name": "@supadata/langchain-js",
   "version": "0.1.0",
   "description": "Supadata document loader integration for LangChain JS",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MUDASSIR-75/langchain-supadata.git"
+    "url": "git+https://github.com/supadata-ai/langchain-js.git"
   },
   "bugs": {
-    "url": "https://github.com/MUDASSIR-75/langchain-supadata/issues"
+    "url": "https://github.com/supadata-ai/langchain-js/issues"
   },
-  "homepage": "https://github.com/MUDASSIR-75/langchain-supadata#readme",
+  "homepage": "https://github.com/supadata-ai/langchain-js#readme",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
