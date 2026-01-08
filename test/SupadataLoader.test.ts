@@ -1,6 +1,6 @@
 // test/SupadataLoader.test.ts
-import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
-import {SupadataLoader} from "../src/SupadataLoader.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { SupadataLoader } from "../src/SupadataLoader.js";
 
 const {
     mockTranscript,
@@ -15,10 +15,10 @@ const {
     const mockSupadataConstructor = vi.fn().mockImplementation(() => ({
         transcript: mockTranscript,
         metadata: mockMetadata,
-        youtube: {video: mockYoutubeVideo},
+        youtube: { video: mockYoutubeVideo },
     }));
 
-    return {mockTranscript, mockMetadata, mockYoutubeVideo, mockSupadataConstructor};
+    return { mockTranscript, mockMetadata, mockYoutubeVideo, mockSupadataConstructor };
 });
 
 vi.mock("@supadata/js", () => ({
@@ -28,7 +28,7 @@ vi.mock("@supadata/js", () => ({
 const REAL_ENV = process.env;
 
 beforeEach(() => {
-    process.env = {...REAL_ENV};
+    process.env = { ...REAL_ENV };
     mockTranscript.mockReset();
     mockMetadata.mockReset();
     mockYoutubeVideo.mockReset();
@@ -41,23 +41,27 @@ afterEach(() => {
 
 describe("SupadataLoader", () => {
     it("initializes with explicit API key", async () => {
-        mockTranscript.mockResolvedValue({content: "test", lang: "en"});
+        mockTranscript.mockResolvedValue({ content: "test", lang: "en" });
 
-        const loader = new SupadataLoader({apiKey: "test-key"});
-        await loader.load({url: "https://www.youtube.com/watch?v=123"});
+        const loader = new SupadataLoader({
+            apiKey: "test-key",
+            url: "https://www.youtube.com/watch?v=123",
+        });
+        await loader.load();
 
-        expect(mockSupadataConstructor).toHaveBeenCalledWith({apiKey: "test-key"});
+        expect(mockSupadataConstructor).toHaveBeenCalledWith({ apiKey: "test-key" });
     });
 
     it("fetches transcript successfully", async () => {
-        mockTranscript.mockResolvedValue({content: "Hello world", lang: "en"});
+        mockTranscript.mockResolvedValue({ content: "Hello world", lang: "en" });
 
-        const loader = new SupadataLoader({apiKey: "test-key"});
-        const docs = await loader.load({
+        const loader = new SupadataLoader({
+            apiKey: "test-key",
             url: "https://www.youtube.com/watch?v=123",
             operation: "transcript",
             text: true,
         });
+        const docs = await loader.load();
 
         expect(mockTranscript).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -71,13 +75,14 @@ describe("SupadataLoader", () => {
     });
 
     it("fetches metadata successfully", async () => {
-        mockMetadata.mockResolvedValue({title: "Awesome Video"});
+        mockMetadata.mockResolvedValue({ title: "Awesome Video" });
 
-        const loader = new SupadataLoader({apiKey: "test-key"});
-        const docs = await loader.load({
+        const loader = new SupadataLoader({
+            apiKey: "test-key",
             url: "https://www.youtube.com/watch?v=123",
             operation: "metadata",
         });
+        const docs = await loader.load();
 
         expect(mockMetadata).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -90,10 +95,14 @@ describe("SupadataLoader", () => {
     });
 
     it("rejects non-social URLs", async () => {
-        const loader = new SupadataLoader({apiKey: "test-key"});
+        const loader = new SupadataLoader({
+            apiKey: "test-key",
+            url: "https://example.com",
+            operation: "metadata",
+        });
 
-        await expect(
-            loader.load({url: "https://example.com", operation: "metadata"}),
-        ).rejects.toThrow(/only social media video\/post URLs are supported/i);
+        await expect(loader.load()).rejects.toThrow(
+            /only social media video\/post URLs are supported/i,
+        );
     });
 });

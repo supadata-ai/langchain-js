@@ -8,10 +8,6 @@ export type SupadataOperation = "metadata" | "transcript";
 
 export type SupadataTranscriptMode = "native" | "auto" | "generate";
 
-export interface SupadataLoaderInit {
-    apiKey?: string;
-}
-
 export interface SupadataLoaderLoadInput {
     url: string;
     operation?: SupadataOperation;
@@ -21,8 +17,12 @@ export interface SupadataLoaderLoadInput {
     params?: Record<string, unknown>;
 }
 
+export interface SupadataLoaderInit extends SupadataLoaderLoadInput {
+    apiKey?: string;
+}
+
 /**
- * SupadataLoader integrates Supadata’s video/post scraping endpoints with LangChain JS.
+ * SupadataLoader integrates Supadata's video/post scraping endpoints with LangChain JS.
  *
  * Supported operations:
  * - "transcript": Fetch transcript for a supported social media URL.
@@ -32,20 +32,29 @@ export interface SupadataLoaderLoadInput {
  *
  * This loader does NOT perform generic web scraping and does NOT call any web scrape APIs.
  *
- * The loader is instantiated once (with optional API key), and request-specific parameters
- * are provided to `load(...)`.
+ * The loader is instantiated with the URL, operation, and optional API key. Call `load()` to fetch data.
  */
 export class SupadataLoader extends BaseDocumentLoader {
     private readonly apiKey?: string;
+    private readonly input: SupadataLoaderLoadInput;
 
-    constructor(init: SupadataLoaderInit = {}) {
+    constructor(init: SupadataLoaderInit) {
         super();
         this.apiKey = init.apiKey;
+        this.input = {
+            url: init.url,
+            operation: init.operation,
+            lang: init.lang,
+            text: init.text,
+            mode: init.mode,
+            params: init.params,
+        };
     }
 
-    async load(input: SupadataLoaderLoadInput): Promise<Document[]> {
+    async load(): Promise<Document[]> {
+        const input = this.input;
         if (!input?.url) {
-            throw new Error("SupadataLoader.load: `url` is required.");
+            throw new Error("SupadataLoader: `url` is required in constructor.");
         }
 
         const url = input.url;
